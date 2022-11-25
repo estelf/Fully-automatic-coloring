@@ -3,7 +3,7 @@ import torchvision
 import glob
 import cv2
 import PIL
-import numpy as np
+import os
 import matplotlib.pyplot as plt
 from unet import UNet
 import imutils
@@ -70,7 +70,7 @@ def show_tensor(input_image_tensor, f):
     img = input_image_tensor.to("cpu").detach().numpy().transpose(1, 2, 0)
     # img = img.astype(np.uint8)[0,0,:,:]
     plt.imshow(img)
-    plt.savefig(f"test_{f}.png")
+    plt.savefig(f"res\\test_{f}.png")
     # plt.show()
 
 
@@ -94,14 +94,14 @@ model = UNet(3, 3)
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
 # 損失関数,分類問題のためクロスエントロピー損失関数を利用
-criterion = torch.nn.MSELoss()
+criterion = torch.nn.CrossEntropyLoss()
 optimizer = torch.optim.Adam(model.parameters())
 
 EPOCHS = 300
 a, b = next(iter(train_loader))
 # show_tensor(torchvision.utils.make_grid(torch.cat([a, b])))
-
-for epoch in range(EPOCHS):
+os.makedirs("res", exist_ok=True)
+for epoch in tqdm.tqdm(range(EPOCHS)):
     model.train()  # モデルを学習モードにしてGPUに転送（重要）
     model.to(device)
 
@@ -127,10 +127,11 @@ for epoch in range(EPOCHS):
     model.eval()  # 評価モードにする
 
     with torch.no_grad():  # 必須
-        for batch in tqdm.tqdm(train_loader):
+        for batch in train_loader:
             image, label = batch  # (batch_size, channel, size, size)
 
             image = image.to(device)
             label = label.to(device)
             preds = model(image)
         show_tensor(torchvision.utils.make_grid(torch.cat([image, label, preds])), epoch)
+torch.save(model, "model.pth")
