@@ -26,6 +26,8 @@ class dataset_faces(torch.utils.data.Dataset):
         return self.linedraw(img), img
 
     def linedraw(self, x):
+        transform = torchvision.transforms.Grayscale(3)
+        x = transform(x)
         # 3x3カーネルで膨張1回（膨張はMaxPoolと同じ）
         dilated = torch.max_pool2d(x, kernel_size=3, stride=1, padding=1)
         # 膨張の前後でL1の差分を取る
@@ -79,8 +81,9 @@ transform = torchvision.transforms.Compose(
     [
         torchvision.transforms.Lambda(cvfunc),
         torchvision.transforms.ToTensor(),
-        # torchvision.transforms.Resize([256, 256]),
+        torchvision.transforms.RandomRotation(degrees=90, fill=(255, 255, 255)),
         torchvision.transforms.RandomHorizontalFlip(p=0.5),
+        torchvision.transforms.RandomVerticalFlip(p=0.5),
     ]
 )
 
@@ -94,11 +97,14 @@ model = UNet(3, 3)
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
 # 損失関数,分類問題のためクロスエントロピー損失関数を利用
-criterion = torch.nn.CrossEntropyLoss()
+# criterion = torch.nn.CrossEntropyLoss()
+# criterion = torch.nn.MSELoss()
+criterion = torch.nn.L1Loss()
 optimizer = torch.optim.Adam(model.parameters())
 
-EPOCHS = 300
+EPOCHS = 10000
 a, b = next(iter(train_loader))
+print(a.shape, b.shape)
 # show_tensor(torchvision.utils.make_grid(torch.cat([a, b])))
 os.makedirs("res", exist_ok=True)
 for epoch in tqdm.tqdm(range(EPOCHS)):
@@ -134,4 +140,4 @@ for epoch in tqdm.tqdm(range(EPOCHS)):
             label = label.to(device)
             preds = model(image)
         show_tensor(torchvision.utils.make_grid(torch.cat([image, label, preds])), epoch)
-torch.save(model, "model.pth")
+torch.save(model.state_dict(), "model.pth")
