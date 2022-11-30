@@ -1,5 +1,6 @@
 !*.py
 image/
+runs/
 *.pyc
 *.png
 *.pth

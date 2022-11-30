@@ -63,7 +63,7 @@ def resize_img(img):
 
 def cvfunc(img):
     img = img[:, :, ::-1]
-    img = resize_img(img)
+    # img = resize_img(img)
     # img = cv2.cvtColor(img, cv2.COLOR_BGR2LAB)
     return PIL.Image.fromarray(img)
 
@@ -76,7 +76,6 @@ def show_tensor(input_image_tensor, f):
     # plt.show()
 
 
-"""****000000****"""  # オーグメンテーションをいろいろ追加してみてもよいと思います！
 transform = torchvision.transforms.Compose(
     [
         torchvision.transforms.Lambda(cvfunc),
@@ -139,5 +138,6 @@ for epoch in tqdm.tqdm(range(EPOCHS)):
             image = image.to(device)
             label = label.to(device)
             preds = model(image)
+    if epoch % 10 == 0:
         show_tensor(torchvision.utils.make_grid(torch.cat([image, label, preds])), epoch)
-torch.save(model.state_dict(), "model.pth")
+        torch.save(model.state_dict(), "model.pth")
