@@ -1,13 +1,17 @@
-import cv2
-import PIL
-import time
-import matplotlib.pyplot as plt
-import imutils
-import numpy as np
 import datetime
-import tqdm
-from IPython.display import HTML, display
+import io
+import random
+import sys
+
 import albumentations as A
+import cv2
+import imutils
+import matplotlib.pyplot as plt
+import numpy as np
+import PIL
+import seaborn as sns
+import sklearn.metrics
+import torch
 
 
 # アルバメンテーション用リストをtorchV.lamda用に機能拡張
@@ -23,7 +27,35 @@ class AlbTransToTVLambda:
         return self.list[i]
 
 
-# 補助用関数
+# 学習自動停止機構
+class early_stopping:
+    def __init__(self, user_count):
+        self.pre_loss = sys.maxsize
+        self.user_count = user_count
+        self.conter = 0
+
+    def check(self, loss):
+        if self.pre_loss > loss:
+            self.pre_loss = loss
+            self.conter = 0
+        else:
+            self.conter = self.conter + 1
+
+        if self.conter >= self.user_count:
+            print(f"{self.user_count}回更新しなかったため停止しました")
+            raise KeyboardInterrupt
+
+
+def make_confusion_matrix_img(y_test, pred):
+    mem = io.BytesIO()
+    cm = sklearn.metrics.confusion_matrix(y_test, pred)
+    sns.heatmap(cm, square=True, cbar=True, annot=True, cmap="Blues")
+    plt.savefig(mem, format="png")
+    mem.seek(0)
+    img = cv2.imdecode(np.asarray(bytearray(mem.read())), cv2.IMREAD_COLOR)
+    return img
+
+
 def resize_img(img):
     """
     画像をpaddingしながら256x256にする
@@ -56,9 +88,22 @@ def save_tensor(input_image_tensor, f):
 def show_tensor(input_image_tensor):
     # writer.add_image(tag="img",img_tensor=input_image_tensor,global_step=f)
     img = input_image_tensor.to("cpu").detach().numpy().transpose(1, 2, 0)
-    plt.imshow(img)
+
+    plt.imshow((img * 255).astype(np.uint8))
     # plt.savefig(f"res\\test_{f}.png")
     # plt.show()
+
+
+def torch_fix_seed(seed):
+    # Python random
+    random.seed(seed)
+    # Numpy
+    np.random.seed(seed)
+    # Pytorch
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed(seed)
+    torch.backends.cudnn.deterministic = True
+    torch.use_deterministic_algorithms = True
 
 
 class Report:
@@ -73,6 +118,7 @@ class Report:
         split_rate = params["split_rate"]
         auglist = params["auglist"]
         linedataset = params["linedataset"]
+        early_stopping_count = params["early_stopping_count"]
 
         now = datetime.datetime.now()
         today = now.strftime("%Y年%m月%d日(%A) %H:%M:%S")
@@ -124,6 +170,11 @@ class Report:
             <tr>
                 <td style="border: solid 1px #adb3c1;">総エポック数</td>
                 <td style="border: solid 1px #adb3c1;">{EPOCHS}</td>
+            </tr>
+
+            <tr>
+                <td style="border: solid 1px #adb3c1;">早期打ち止め回数</td>
+                <td style="border: solid 1px #adb3c1;">{early_stopping_count}</td>
             </tr>
             <tr>
                 <td style="border: solid 1px #adb3c1;">tensorBoardパス</td>
@@ -199,6 +250,7 @@ class Report:
 |最適化関数|{optimizer.__class__.__name__}|
 |スケジューラ|{scheduler.__class__.__name__}|
 |総エポック数|{EPOCHS}|
+|早期打ち止め回数|{early_stopping_count}|
 |tensorBoardパス|{writer.log_dir}|
 
 |**最適化関数レポート**||
@@ -217,4 +269,6 @@ class Report:
         """
 
     def display(self):
+        from IPython.display import HTML, display
+
         display(HTML(self.RowHTML))
